@@ -48,7 +48,7 @@ func (h *ShortenerHandler) ShortenUrl(w http.ResponseWriter, r *http.Request) {
 
 	// todo продумать бизнесовые ошибки и ловить их тут
 	if err != nil {
-		http.Error(w, "Failed to shorten URL", http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
