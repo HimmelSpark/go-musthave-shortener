@@ -10,28 +10,28 @@ import (
 )
 
 type ShortenerService interface {
-	ShortenURL(url string, hostUrl string) (string, error)
-	FindUrl(shortId string) (string, error)
+	ShortenURL(url string, hostURL string) (string, error)
+	FindURL(shortID string) (string, error)
 }
 type shortenerService struct {
-	urlRepo repository.UrlRepository
+	urlRepo repository.URLRepository
 }
 
-func NewShortenerService(urlRepo repository.UrlRepository) ShortenerService {
+func NewShortenerService(urlRepo repository.URLRepository) ShortenerService {
 	return &shortenerService{urlRepo: urlRepo}
 }
 
-func (s *shortenerService) FindUrl(shortId string) (string, error) {
-	shortId = strings.TrimSpace(shortId)
-	url, err := s.urlRepo.FindUrl(shortId)
+func (s *shortenerService) FindURL(shortID string) (string, error) {
+	shortID = strings.TrimSpace(shortID)
+	url, err := s.urlRepo.FindURL(shortID)
 	return url, err
 }
 
-func (s *shortenerService) ShortenURL(url string, hostUrl string) (string, error) {
+func (s *shortenerService) ShortenURL(url string, hostURL string) (string, error) {
 	url = strings.TrimSpace(url)
 	for i := 0; i < 5; i++ {
 		randStr, _ := generateRandomString()
-		ok, err := s.urlRepo.CreateUrl(url, randStr)
+		ok, err := s.urlRepo.CreateURL(url, randStr)
 		if err != nil {
 			fmt.Println(err)
 			return "Failed to create a short url", err
@@ -39,7 +39,7 @@ func (s *shortenerService) ShortenURL(url string, hostUrl string) (string, error
 		if !ok {
 			continue
 		}
-		return hostUrl + "/" + randStr, nil
+		return hostURL + "/" + randStr, nil
 	}
 	return "", errors.New("failed to create a short url")
 }

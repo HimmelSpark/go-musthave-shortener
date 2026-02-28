@@ -12,7 +12,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func GetDbConnection() *sql.DB {
+func GetDBConnection() *sql.DB {
 	driver := flag.String("db-driver", "pgx", "Database driver")
 	//dsn := flag.String("dsn", "", "Database DSN")
 	dsnFromEnv, _ := os.LookupEnv("DATABASE_CONN_STRING")

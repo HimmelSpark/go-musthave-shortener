@@ -3,7 +3,6 @@ package main
 import (
 	"net/http"
 
-	"github.com/HimmelSpark/go-musthave-shortener.git/internal/config/db"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/handler"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/middleware"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/repository"
@@ -13,13 +12,14 @@ import (
 func main() {
 	mux := http.NewServeMux()
 
-	dbConn := db.GetDbConnection()
-	urlRepo := repository.NewUrlRepository(dbConn)
+	//dbConn := db.GetDBConnection()
+	//urlRepo := repository.NewURLRepository(dbConn)
+	urlRepo := repository.NewInMemoryURLRepository()
 
 	shortenerService := service.NewShortenerService(urlRepo)
 	shortenerHandler := handler.NewShortenerHandler(shortenerService)
 
-	mux.HandleFunc("POST /", shortenerHandler.ShortenUrl)
+	mux.HandleFunc("POST /", shortenerHandler.ShortenURL)
 	mux.HandleFunc("GET /{urlId}", shortenerHandler.GetRedirectURL)
 
 	handlerChain := middleware.LoggingMiddleware(mux)

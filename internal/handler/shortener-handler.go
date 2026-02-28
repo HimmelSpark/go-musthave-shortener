@@ -16,7 +16,7 @@ func NewShortenerHandler(shortenerService service.ShortenerService) *ShortenerHa
 	return &ShortenerHandler{shortenerService}
 }
 
-func (h *ShortenerHandler) ShortenUrl(w http.ResponseWriter, r *http.Request) {
+func (h *ShortenerHandler) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -63,13 +63,13 @@ func (h *ShortenerHandler) GetRedirectURL(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	urlShortId := r.PathValue("urlId")
-	if urlShortId == "" {
+	urlShortID := r.PathValue("urlId")
+	if urlShortID == "" {
 		http.NotFound(w, r)
 		return
 	}
 
-	url, err := h.service.FindUrl(urlShortId)
+	url, err := h.service.FindURL(urlShortID)
 	if err != nil {
 		http.Error(w, "Failed to find url", http.StatusBadRequest)
 	}
