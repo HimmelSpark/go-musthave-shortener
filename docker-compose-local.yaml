@@ -1,0 +1,14 @@
+services:
+  shortener-db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: shortener
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - shortener-db:/var/lib/postgresql
+    ports:
+      - "5432:5432"
+
+volumes:
+  shortener-db:
