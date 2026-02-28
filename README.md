@@ -42,3 +42,9 @@ git fetch template && git checkout template/v2 .github
 - **Clean Architecture**
 - **Hexagonal Architecture**
 - **Layered Architecture**
+
+
+## Накатить скрипты локально
+migrate -path ./migrations \
+-database "postgres://postgres:postgres@localhost:5432/shortener?sslmode=disable&search_path=shortener" \
+up
