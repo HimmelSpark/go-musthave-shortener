@@ -20,8 +20,8 @@ func NewURLRepository(db *sql.DB) URLRepository {
 	return &urlRepository{db: db}
 }
 
-func (u urlRepository) FindURL(s string) (string, error) {
-	row := u.db.QueryRow("SELECT original_url FROM shortener.redirection WHERE redirect_url = $1", s)
+func (u urlRepository) FindURL(shortURLID string) (string, error) {
+	row := u.db.QueryRow("SELECT original_url FROM shortener.redirection WHERE redirect_url = $1", shortURLID)
 
 	var originalURL string
 
