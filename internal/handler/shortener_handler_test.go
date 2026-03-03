@@ -71,6 +71,22 @@ func TestCreateShortUrlOk(t *testing.T) {
 	require.Equal(t, "http://localhost:8080", mock.gotBaseURL)
 }
 
-/*
-Можно еще много кейсов накидать, но пока лень 🦥
-*/
+func TestGetRedirectURLOk(t *testing.T) {
+	h, mock := newTestHandler()
+	mock.findFn = func(id string) (string, error) {
+		return "https://yandex.ru", nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/AvAjEv0l", nil)
+	req.SetPathValue("urlId", "AvAjEv0l")
+	rec := httptest.NewRecorder()
+
+	h.GetRedirectURL(rec, req)
+
+	res := rec.Result()
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusTemporaryRedirect, res.StatusCode)
+	require.Equal(t, "https://yandex.ru", res.Header.Get("Location"))
+	require.Equal(t, "AvAjEv0l", mock.gotID)
+}
