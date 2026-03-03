@@ -2,44 +2,54 @@ package service
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
+	"github.com/HimmelSpark/go-musthave-shortener.git/internal/config/shortener"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/repository"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 type ShortenerService interface {
-	ShortenURL(url string, hostURL string) (string, error)
+	ShortenURL(url string) (string, error)
 	FindURL(shortID string) (string, error)
 }
 type shortenerService struct {
-	urlRepo repository.URLRepository
+	urlRepo       repository.URLRepository
+	serviceConfig *shortener.ServiceConfig
 }
 
-func NewShortenerService(urlRepo repository.URLRepository) ShortenerService {
-	return &shortenerService{urlRepo: urlRepo}
+func NewShortenerService(urlRepo repository.URLRepository, serviceConfig *shortener.ServiceConfig) ShortenerService {
+	if serviceConfig == nil || serviceConfig.BaseURL == nil {
+		panic("shortener service config is required")
+	}
+	if strings.TrimSpace(*serviceConfig.BaseURL) == "" {
+		panic("shortener service base url must not be empty")
+	}
+
+	return &shortenerService{
+		urlRepo:       urlRepo,
+		serviceConfig: serviceConfig,
+	}
 }
 
 func (s *shortenerService) FindURL(shortID string) (string, error) {
 	shortID = strings.TrimSpace(shortID)
-	url, err := s.urlRepo.FindURL(shortID)
-	return url, err
+	return s.urlRepo.FindURLShortID(shortID)
 }
 
-func (s *shortenerService) ShortenURL(url string, hostURL string) (string, error) {
+func (s *shortenerService) ShortenURL(url string) (string, error) {
 	url = strings.TrimSpace(url)
+	baseURL := strings.TrimRight(*s.serviceConfig.BaseURL, "/")
 	for i := 0; i < 5; i++ {
 		randStr, _ := generateRandomString()
 		ok, err := s.urlRepo.CreateURL(url, randStr)
 		if err != nil {
-			fmt.Println(err)
 			return "Failed to create a short url", err
 		}
 		if !ok {
 			continue
 		}
-		return hostURL + "/" + randStr, nil
+		return baseURL + "/" + randStr, nil
 	}
 	return "", errors.New("failed to create a short url")
 }
@@ -49,6 +59,5 @@ func generateRandomString() (string, error) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(id)
 	return id, nil
 }

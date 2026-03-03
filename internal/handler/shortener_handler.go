@@ -36,15 +36,7 @@ func (h *ShortenerHandler) ShortenURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-
-	host := r.Host
-	baseURL := scheme + "://" + host
-
-	short, err := h.service.ShortenURL(url, baseURL)
+	short, err := h.service.ShortenURL(url)
 
 	// todo продумать бизнесовые ошибки и ловить их тут
 	if err != nil {
@@ -72,10 +64,12 @@ func (h *ShortenerHandler) GetRedirectURL(w http.ResponseWriter, r *http.Request
 	url, err := h.service.FindURL(urlShortID)
 	if err != nil {
 		http.Error(w, "Failed to find url", http.StatusBadRequest)
+		return
 	}
 
 	if url == "" {
 		http.NotFound(w, r)
+		return
 	}
 
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)

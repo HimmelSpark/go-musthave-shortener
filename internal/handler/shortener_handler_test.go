@@ -6,25 +6,22 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 )
 
 type mockShortenerService struct {
-	shortenFn func(url, baseURL string) (string, error)
+	shortenFn func(url string) (string, error)
 	findFn    func(id string) (string, error)
 
-	gotURL     string
-	gotBaseURL string
-	gotID      string
+	gotURL string
+	gotID  string
 }
 
-func (m *mockShortenerService) ShortenURL(url, baseURL string) (string, error) {
+func (m *mockShortenerService) ShortenURL(url string) (string, error) {
 	m.gotURL = url
-	m.gotBaseURL = baseURL
 	if m.shortenFn != nil {
-		return m.shortenFn(url, baseURL)
+		return m.shortenFn(url)
 	}
 	return "", nil
 }
@@ -45,8 +42,8 @@ func newTestHandler() (*ShortenerHandler, *mockShortenerService) {
 
 func TestCreateShortUrlOk(t *testing.T) {
 	h, mock := newTestHandler()
-	mock.shortenFn = func(url, baseURL string) (string, error) {
-		return "AvAjEv0l", nil
+	mock.shortenFn = func(url string) (string, error) {
+		return "http://localhost:8080/AvAjEv0l", nil
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "http://localhost:8080/", strings.NewReader("https://yandex.ru"))
@@ -64,11 +61,9 @@ func TestCreateShortUrlOk(t *testing.T) {
 
 	require.Equal(t, http.StatusCreated, res.StatusCode)
 	require.True(t, strings.HasPrefix(res.Header.Get("Content-Type"), "text/plain"))
-	require.NotEmpty(t, body)
-	require.Equal(t, 8, utf8.RuneCountInString(body))
+	require.Equal(t, "http://localhost:8080/AvAjEv0l", body)
 
 	require.Equal(t, "https://yandex.ru", mock.gotURL)
-	require.Equal(t, "http://localhost:8080", mock.gotBaseURL)
 }
 
 func TestGetRedirectURLOk(t *testing.T) {
