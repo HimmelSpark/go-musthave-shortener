@@ -18,18 +18,18 @@ type shortenerService struct {
 	serviceConfig *shortener.ServiceConfig
 }
 
-func NewShortenerService(urlRepo repository.URLRepository, serviceConfig *shortener.ServiceConfig) ShortenerService {
+func NewShortenerService(urlRepo repository.URLRepository, serviceConfig *shortener.ServiceConfig) (ShortenerService, error) {
 	if serviceConfig == nil || serviceConfig.BaseURL == nil {
-		panic("shortener service config is required")
+		return nil, errors.New("shortener service config is nil")
 	}
 	if strings.TrimSpace(*serviceConfig.BaseURL) == "" {
-		panic("shortener service base url must not be empty")
+		return nil, errors.New("shortener service config is empty")
 	}
 
 	return &shortenerService{
 		urlRepo:       urlRepo,
 		serviceConfig: serviceConfig,
-	}
+	}, nil
 }
 
 func (s *shortenerService) FindURL(shortID string) (string, error) {

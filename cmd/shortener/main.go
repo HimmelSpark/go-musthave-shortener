@@ -18,7 +18,10 @@ func main() {
 	r.Use(middleware.LoggingMiddleware)
 
 	//sqlConfig := db.Init()
-	//dbConn := db.GetDBConnection(sqlConfig)
+	//dbConn, err := db.GetDBConnection(sqlConfig)
+	//if err != nil {
+	//	panic(err)
+	//}
 	//urlRepo := repository.NewURLRepository(dbConn)
 
 	serverConfig := server.Init()
@@ -28,7 +31,10 @@ func main() {
 
 	urlRepo := repository.NewInMemoryURLRepository()
 
-	shortenerService := service.NewShortenerService(urlRepo, shortenerConfig)
+	shortenerService, err := service.NewShortenerService(urlRepo, shortenerConfig)
+	if err != nil {
+		panic(err)
+	}
 	shortenerHandler := handler.NewShortenerHandler(shortenerService)
 
 	r.Post("/", shortenerHandler.ShortenURL)

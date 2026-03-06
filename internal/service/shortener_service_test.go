@@ -11,7 +11,8 @@ import (
 func TestShortenerService_FindURL_OK(t *testing.T) {
 	repo := repository.NewInMemoryURLRepository()
 	baseURL := "http://localhost:8080"
-	svc := NewShortenerService(repo, &config.ServiceConfig{BaseURL: &baseURL})
+	svc, err := NewShortenerService(repo, &config.ServiceConfig{BaseURL: &baseURL})
+	require.NoError(t, err)
 
 	ok, err := repo.CreateURL("https://yandex.ru", "AvAjEv0l")
 	require.NoError(t, err)
@@ -25,7 +26,8 @@ func TestShortenerService_FindURL_OK(t *testing.T) {
 func TestShortenerService_ShortenURL_OK(t *testing.T) {
 	repo := repository.NewInMemoryURLRepository()
 	host := "http://localhost:8080"
-	svc := NewShortenerService(repo, &config.ServiceConfig{BaseURL: &host})
+	svc, err := NewShortenerService(repo, &config.ServiceConfig{BaseURL: &host})
+	require.NoError(t, err)
 
 	orig := "  https://yandex.ru  "
 

@@ -30,10 +30,11 @@ func Init() *SQLConfig {
 	//dsnFromEnv, _ := os.LookupEnv("DATABASE_CONN_STRING")
 }
 
-func GetDBConnection(config *SQLConfig) *sql.DB {
+func GetDBConnection(config *SQLConfig) (*sql.DB, error) {
 	db, err := sql.Open(*config.Driver, *config.Dsn)
 	if err != nil {
 		fmt.Println("Error opening database:", err)
+		return nil, err
 	}
 	db.SetMaxOpenConns(*config.MaxOpenConnections)
 	db.SetMaxIdleConns(*config.MaxIdleConnections)
@@ -43,5 +44,5 @@ func GetDBConnection(config *SQLConfig) *sql.DB {
 		log.Fatal(err)
 	}
 
-	return db
+	return db, nil
 }
