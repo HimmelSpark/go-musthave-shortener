@@ -8,7 +8,7 @@ func NewInMemoryURLRepository() URLRepository {
 	return &inMemoryURLRepository{store: make(map[string]string)}
 }
 
-func (i inMemoryURLRepository) FindURL(s string) (string, error) {
+func (i inMemoryURLRepository) FindURLShortID(s string) (string, error) {
 	redirectURL, ok := i.store[s]
 	if !ok {
 		return "", nil
