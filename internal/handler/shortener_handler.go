@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/HimmelSpark/go-musthave-shortener.git/internal/model"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/service"
+	"github.com/mailru/easyjson"
 )
 
 type ShortenerHandler struct {
@@ -73,4 +75,31 @@ func (h *ShortenerHandler) GetRedirectURL(w http.ResponseWriter, r *http.Request
 	}
 
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
+func (h *ShortenerHandler) ShortenURLJSON(w http.ResponseWriter, r *http.Request) {
+	var req model.ShortenRequest
+	if err := easyjson.UnmarshalFromReader(r.Body, &req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	url := strings.TrimSpace(req.URL)
+	if url == "" {
+		http.Error(w, "empty URL", http.StatusBadRequest)
+		return
+	}
+
+	short, err := h.service.ShortenURL(url)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resp := model.ShortenResponse{Result: short}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_, _ = easyjson.MarshalToWriter(&resp, w)
 }

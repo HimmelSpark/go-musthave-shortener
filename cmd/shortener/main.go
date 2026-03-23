@@ -38,6 +38,7 @@ func main() {
 	shortenerHandler := handler.NewShortenerHandler(shortenerService)
 
 	r.Post("/", shortenerHandler.ShortenURL)
+	r.Post("/api/shorten", shortenerHandler.ShortenURLJSON)
 	r.Get("/{urlId}", shortenerHandler.GetRedirectURL)
 
 	if err := http.ListenAndServe(*serverConfig.ServerAddress, r); err != nil {
