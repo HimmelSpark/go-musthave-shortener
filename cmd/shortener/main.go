@@ -16,6 +16,7 @@ import (
 func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.LoggingMiddleware)
+	r.Use(middleware.GzipMiddleware)
 
 	//sqlConfig := db.Init()
 	//dbConn, err := db.GetDBConnection(sqlConfig)
