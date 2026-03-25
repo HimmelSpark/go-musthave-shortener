@@ -6,6 +6,7 @@ import (
 
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/config/server"
 	serviceConfig "github.com/HimmelSpark/go-musthave-shortener.git/internal/config/shortener"
+	storageConfig "github.com/HimmelSpark/go-musthave-shortener.git/internal/config/storage"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/handler"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/middleware"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/repository"
@@ -27,10 +28,14 @@ func main() {
 
 	serverConfig := server.Init()
 	shortenerConfig := serviceConfig.Init()
+	fileConfig := storageConfig.Init()
 
 	flag.Parse()
 
-	urlRepo := repository.NewInMemoryURLRepository()
+	urlRepo, err := repository.NewFileURLRepository(*fileConfig.FileStoragePath)
+	if err != nil {
+		panic(err)
+	}
 
 	shortenerService, err := service.NewShortenerService(urlRepo, shortenerConfig)
 	if err != nil {
