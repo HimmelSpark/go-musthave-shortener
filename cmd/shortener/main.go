@@ -28,11 +28,14 @@ func main() {
 
 	serverConfig := server.Init()
 	shortenerConfig := serviceConfig.Init()
-	fileConfig := storageConfig.Init()
+	fileConfig, err := storageConfig.Init()
+	if err != nil {
+		panic(err)
+	}
 
 	flag.Parse()
 
-	urlRepo, err := repository.NewFileURLRepository(*fileConfig.FileStoragePath)
+	urlRepo, err := repository.NewFileURLRepository(fileConfig.FileStoragePath)
 	if err != nil {
 		panic(err)
 	}

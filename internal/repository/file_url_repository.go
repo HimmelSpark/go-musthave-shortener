@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"bufio"
 	"encoding/json"
 	"os"
 	"strconv"
@@ -17,8 +16,7 @@ type urlRecord struct {
 type fileURLRepository struct {
 	mu       sync.RWMutex
 	store    map[string]string
-	counter  int
-	file     *os.File
+	records  []urlRecord
 	filePath string
 }
 
@@ -49,49 +47,50 @@ func (f *fileURLRepository) CreateURL(originalURL string, shortID string) (bool,
 	}
 
 	f.store[shortID] = originalURL
-	f.counter++
 
 	rec := urlRecord{
-		UUID:        strconv.Itoa(f.counter),
+		UUID:        strconv.Itoa(len(f.records) + 1),
 		ShortURL:    shortID,
 		OriginalURL: originalURL,
 	}
+	f.records = append(f.records, rec)
 
-	return true, f.append(rec)
+	return true, f.save()
 }
 
 func (f *fileURLRepository) load() error {
-	file, err := os.OpenFile(f.filePath, os.O_RDWR|os.O_CREATE, 0644)
+	data, err := os.ReadFile(f.filePath)
 	if err != nil {
-		return err
-	}
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		var rec urlRecord
-		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
-			file.Close()
-			return err
+		if os.IsNotExist(err) {
+			return nil
 		}
-		f.store[rec.ShortURL] = rec.OriginalURL
-		f.counter++
+		return err
 	}
-	if err := scanner.Err(); err != nil {
-		file.Close()
+	if len(data) == 0 {
+		return nil
+	}
+
+	var records []urlRecord
+	if err := json.Unmarshal(data, &records); err != nil {
 		return err
 	}
 
-	f.file = file
+	f.records = records
+	for _, r := range records {
+		f.store[r.ShortURL] = r.OriginalURL
+	}
 	return nil
 }
 
-func (f *fileURLRepository) append(rec urlRecord) error {
-	data, err := json.Marshal(rec)
+func (f *fileURLRepository) save() error {
+	data, err := json.Marshal(f.records)
 	if err != nil {
 		return err
 	}
-	data = append(data, '\n')
 
-	_, err = f.file.Write(data)
-	return err
+	tmp := f.filePath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, f.filePath)
 }
