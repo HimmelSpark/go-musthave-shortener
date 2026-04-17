@@ -3,11 +3,17 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
+	"strings"
 	time2 "time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -35,6 +41,27 @@ func (c *SQLConfig) ApplyEnv() {
 	if dsn, ok := os.LookupEnv("DATABASE_DSN"); ok {
 		*c.Dsn = dsn
 	}
+}
+
+func RunMigrations(dsn string) error {
+	dbURL := strings.Replace(dsn, "postgres://", "pgx5://", 1)
+
+	m, err := migrate.New("file://migrations", dbURL)
+	if err != nil {
+		return fmt.Errorf("failed to create migrate instance: %w", err)
+	}
+	defer m.Close()
+
+	if err := m.Up(); err != nil {
+		if errors.Is(err, migrate.ErrNoChange) {
+			log.Println("Migrations: no changes")
+			return nil
+		}
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	log.Println("Migrations applied successfully")
+	return nil
 }
 
 func GetDBConnection(config *SQLConfig) (*sql.DB, error) {
