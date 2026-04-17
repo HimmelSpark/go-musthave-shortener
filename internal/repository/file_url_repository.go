@@ -58,6 +58,28 @@ func (f *fileURLRepository) CreateURL(originalURL string, shortID string) (bool,
 	return true, f.save()
 }
 
+func (f *fileURLRepository) CreateURLBatch(items []URLBatchItem) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	for _, item := range items {
+		if _, exists := f.store[item.ShortID]; exists {
+			return ErrBatchCollision
+		}
+	}
+
+	for _, item := range items {
+		f.store[item.ShortID] = item.OriginalURL
+		f.records = append(f.records, urlRecord{
+			UUID:        strconv.Itoa(len(f.records) + 1),
+			ShortURL:    item.ShortID,
+			OriginalURL: item.OriginalURL,
+		})
+	}
+
+	return f.save()
+}
+
 func (f *fileURLRepository) load() error {
 	data, err := os.ReadFile(f.filePath)
 	if err != nil {
