@@ -46,6 +46,7 @@ func main() {
 
 	r.Post("/", shortenerHandler.ShortenURL)
 	r.Post("/api/shorten", shortenerHandler.ShortenURLJSON)
+	r.Post("/api/shorten/batch", shortenerHandler.ShortenURLBatch)
 	r.Get("/ping", pingHandler.Ping)
 	r.Get("/{urlId}", shortenerHandler.GetRedirectURL)
 

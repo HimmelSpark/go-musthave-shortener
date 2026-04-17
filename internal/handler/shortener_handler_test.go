@@ -7,12 +7,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/HimmelSpark/go-musthave-shortener.git/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
 type mockShortenerService struct {
-	shortenFn func(url string) (string, error)
-	findFn    func(id string) (string, error)
+	shortenFn      func(url string) (string, error)
+	findFn         func(id string) (string, error)
+	shortenBatchFn func(items []service.ShortenBatchInput) ([]service.ShortenBatchOutput, error)
 
 	gotURL string
 	gotID  string
@@ -32,6 +34,13 @@ func (m *mockShortenerService) FindURL(id string) (string, error) {
 		return m.findFn(id)
 	}
 	return "", nil
+}
+
+func (m *mockShortenerService) ShortenURLBatch(items []service.ShortenBatchInput) ([]service.ShortenBatchOutput, error) {
+	if m.shortenBatchFn != nil {
+		return m.shortenBatchFn(items)
+	}
+	return nil, nil
 }
 
 func newTestHandler() (*ShortenerHandler, *mockShortenerService) {

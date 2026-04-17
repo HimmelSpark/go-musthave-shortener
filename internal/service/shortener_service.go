@@ -9,9 +9,20 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
+type ShortenBatchInput struct {
+	CorrelationID string
+	OriginalURL   string
+}
+
+type ShortenBatchOutput struct {
+	CorrelationID string
+	ShortURL      string
+}
+
 type ShortenerService interface {
 	ShortenURL(url string) (string, error)
 	FindURL(shortID string) (string, error)
+	ShortenURLBatch(items []ShortenBatchInput) ([]ShortenBatchOutput, error)
 }
 type shortenerService struct {
 	urlRepo       repository.URLRepository
@@ -52,6 +63,40 @@ func (s *shortenerService) ShortenURL(url string) (string, error) {
 		return baseURL + "/" + randStr, nil
 	}
 	return "", errors.New("failed to create a short url")
+}
+
+func (s *shortenerService) ShortenURLBatch(items []ShortenBatchInput) ([]ShortenBatchOutput, error) {
+	baseURL := strings.TrimRight(*s.serviceConfig.BaseURL, "/")
+
+	for attempt := 0; attempt < 5; attempt++ {
+		batchItems := make([]repository.URLBatchItem, len(items))
+		for i, item := range items {
+			randStr, _ := generateRandomString()
+			batchItems[i] = repository.URLBatchItem{
+				OriginalURL: strings.TrimSpace(item.OriginalURL),
+				ShortID:     randStr,
+			}
+		}
+
+		err := s.urlRepo.CreateURLBatch(batchItems)
+		if err != nil {
+			if errors.Is(err, repository.ErrBatchCollision) {
+				continue
+			}
+			return nil, err
+		}
+
+		result := make([]ShortenBatchOutput, len(items))
+		for i, item := range items {
+			result[i] = ShortenBatchOutput{
+				CorrelationID: item.CorrelationID,
+				ShortURL:      baseURL + "/" + batchItems[i].ShortID,
+			}
+		}
+		return result, nil
+	}
+
+	return nil, errors.New("failed to create batch short urls: too many collisions")
 }
 
 func generateRandomString() (string, error) {

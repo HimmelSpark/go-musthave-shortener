@@ -103,3 +103,48 @@ func (h *ShortenerHandler) ShortenURLJSON(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusCreated)
 	_, _ = easyjson.MarshalToWriter(&resp, w)
 }
+
+func (h *ShortenerHandler) ShortenURLBatch(w http.ResponseWriter, r *http.Request) {
+	var req model.BatchShortenRequest
+	if err := easyjson.UnmarshalFromReader(r.Body, &req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if len(req) == 0 {
+		http.Error(w, "empty batch", http.StatusBadRequest)
+		return
+	}
+
+	inputs := make([]service.ShortenBatchInput, len(req))
+	for i, item := range req {
+		url := strings.TrimSpace(item.OriginalURL)
+		if url == "" {
+			http.Error(w, "empty URL in batch", http.StatusBadRequest)
+			return
+		}
+		inputs[i] = service.ShortenBatchInput{
+			CorrelationID: item.CorrelationID,
+			OriginalURL:   url,
+		}
+	}
+
+	outputs, err := h.service.ShortenURLBatch(inputs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := make(model.BatchShortenResponse, len(outputs))
+	for i, o := range outputs {
+		resp[i] = model.BatchShortenResponseItem{
+			CorrelationID: o.CorrelationID,
+			ShortURL:      o.ShortURL,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_, _ = easyjson.MarshalToWriter(&resp, w)
+}

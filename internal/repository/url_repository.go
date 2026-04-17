@@ -3,12 +3,22 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 )
+
+type URLBatchItem struct {
+	OriginalURL string
+	ShortID     string
+}
+
+var ErrBatchCollision = errors.New("batch insert collision")
 
 type (
 	URLRepository interface {
 		FindURLShortID(string) (string, error)
 		CreateURL(originalURL string, shortID string) (bool, error)
+		CreateURLBatch(items []URLBatchItem) error
 	}
 
 	urlRepository struct {
@@ -55,4 +65,41 @@ func (u urlRepository) CreateURL(originalURL string, shortID string) (bool, erro
 	}
 
 	return n > 0, nil
+}
+
+func (u urlRepository) CreateURLBatch(items []URLBatchItem) error {
+	tx, err := u.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	var b strings.Builder
+	b.WriteString("INSERT INTO shortener.redirection (original_url, redirect_url) VALUES ")
+
+	args := make([]any, 0, len(items)*2)
+	for i, item := range items {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(fmt.Sprintf("($%d,$%d)", i*2+1, i*2+2))
+		args = append(args, item.OriginalURL, item.ShortID)
+	}
+	b.WriteString(" ON CONFLICT (redirect_url) DO NOTHING")
+
+	res, err := tx.Exec(b.String(), args...)
+	if err != nil {
+		return fmt.Errorf("failed to execute batch insert: %w", err)
+	}
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if int(n) != len(items) {
+		return ErrBatchCollision
+	}
+
+	return tx.Commit()
 }
