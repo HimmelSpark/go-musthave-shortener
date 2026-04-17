@@ -75,6 +75,30 @@ func TestCreateShortUrlOk(t *testing.T) {
 	require.Equal(t, "https://yandex.ru", mock.gotURL)
 }
 
+func TestCreateShortUrlConflict(t *testing.T) {
+	h, mock := newTestHandler()
+	mock.shortenFn = func(url string) (string, error) {
+		return "", &service.ErrConflict{ExistingURL: "http://localhost:8080/existing"}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "http://localhost:8080/", strings.NewReader("https://yandex.ru"))
+	req.Host = "localhost:8080"
+	rec := httptest.NewRecorder()
+
+	h.ShortenURL(rec, req)
+
+	res := rec.Result()
+	defer res.Body.Close()
+
+	b, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	body := string(b)
+
+	require.Equal(t, http.StatusConflict, res.StatusCode)
+	require.True(t, strings.HasPrefix(res.Header.Get("Content-Type"), "text/plain"))
+	require.Equal(t, "http://localhost:8080/existing", body)
+}
+
 func TestGetRedirectURLOk(t *testing.T) {
 	h, mock := newTestHandler()
 	mock.findFn = func(id string) (string, error) {

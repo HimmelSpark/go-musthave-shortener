@@ -17,6 +17,12 @@ func (i inMemoryURLRepository) FindURLShortID(s string) (string, error) {
 }
 
 func (i inMemoryURLRepository) CreateURL(originalURL string, shortID string) (bool, error) {
+	for existingShortID, existingOrigURL := range i.store {
+		if existingOrigURL == originalURL {
+			return false, &ErrDuplicateURL{ExistingShortID: existingShortID}
+		}
+	}
+
 	i.store[shortID] = originalURL
 	return true, nil
 }

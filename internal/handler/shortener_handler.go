@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -39,9 +40,14 @@ func (h *ShortenerHandler) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	short, err := h.service.ShortenURL(url)
-
-	// todo продумать бизнесовые ошибки и ловить их тут
 	if err != nil {
+		var conflictErr *service.ErrConflict
+		if errors.As(err, &conflictErr) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(conflictErr.ExistingURL))
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -93,6 +99,14 @@ func (h *ShortenerHandler) ShortenURLJSON(w http.ResponseWriter, r *http.Request
 
 	short, err := h.service.ShortenURL(url)
 	if err != nil {
+		var conflictErr *service.ErrConflict
+		if errors.As(err, &conflictErr) {
+			resp := model.ShortenResponse{Result: conflictErr.ExistingURL}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_, _ = easyjson.MarshalToWriter(&resp, w)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

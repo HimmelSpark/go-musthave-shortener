@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type URLBatchItem struct {
@@ -13,6 +16,14 @@ type URLBatchItem struct {
 }
 
 var ErrBatchCollision = errors.New("batch insert collision")
+
+type ErrDuplicateURL struct {
+	ExistingShortID string
+}
+
+func (e *ErrDuplicateURL) Error() string {
+	return "original URL already exists"
+}
 
 type (
 	URLRepository interface {
@@ -47,24 +58,29 @@ func (u urlRepository) FindURLShortID(shortURLID string) (string, error) {
 }
 
 func (u urlRepository) CreateURL(originalURL string, shortID string) (bool, error) {
-
-	res, err := u.db.Exec(
-		`INSERT INTO shortener.redirection (original_url, redirect_url) 
-				VALUES ($1, $2) ON CONFLICT (redirect_url) DO NOTHING`,
+	var returnedShortID string
+	err := u.db.QueryRow(
+		`INSERT INTO shortener.redirection (original_url, redirect_url)
+		 VALUES ($1, $2)
+		 ON CONFLICT (original_url) DO UPDATE SET original_url = EXCLUDED.original_url
+		 RETURNING redirect_url`,
 		originalURL,
 		shortID,
-	)
+	).Scan(&returnedShortID)
 
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return false, nil
+		}
 		return false, err
 	}
 
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
+	if returnedShortID != shortID {
+		return false, &ErrDuplicateURL{ExistingShortID: returnedShortID}
 	}
 
-	return n > 0, nil
+	return true, nil
 }
 
 func (u urlRepository) CreateURLBatch(items []URLBatchItem) error {

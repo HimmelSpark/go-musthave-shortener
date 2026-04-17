@@ -42,6 +42,12 @@ func (f *fileURLRepository) CreateURL(originalURL string, shortID string) (bool,
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	for existingShortID, existingOrigURL := range f.store {
+		if existingOrigURL == originalURL {
+			return false, &ErrDuplicateURL{ExistingShortID: existingShortID}
+		}
+	}
+
 	if _, exists := f.store[shortID]; exists {
 		return false, nil
 	}
