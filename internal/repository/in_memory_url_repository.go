@@ -20,10 +20,3 @@ func (i inMemoryURLRepository) CreateURL(originalURL string, shortID string) (bo
 	i.store[shortID] = originalURL
 	return true, nil
 }
-
-func (i inMemoryURLRepository) CreateURLBatch(items []URLBatchItem) error {
-	for _, item := range items {
-		i.store[item.ShortID] = item.OriginalURL
-	}
-	return nil
-}

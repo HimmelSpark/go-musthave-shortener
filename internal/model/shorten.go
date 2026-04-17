@@ -9,21 +9,3 @@ type ShortenRequest struct {
 type ShortenResponse struct {
 	Result string `json:"result"`
 }
-
-//easyjson:json
-type BatchShortenRequestItem struct {
-	CorrelationID string `json:"correlation_id"`
-	OriginalURL   string `json:"original_url"`
-}
-
-//easyjson:json
-type BatchShortenRequest []BatchShortenRequestItem
-
-//easyjson:json
-type BatchShortenResponseItem struct {
-	CorrelationID string `json:"correlation_id"`
-	ShortURL      string `json:"short_url"`
-}
-
-//easyjson:json
-type BatchShortenResponse []BatchShortenResponseItem
