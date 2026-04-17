@@ -60,6 +60,9 @@ func initStorage(sqlConfig *dbConfig.SQLConfig, fileConfig *storageConfig.Config
 		if err != nil {
 			log.Printf("Failed to connect to database: %v. Falling back to file/in-memory storage.", err)
 		} else {
+			if err := dbConfig.RunMigrations(*sqlConfig.Dsn); err != nil {
+				log.Printf("Failed to run migrations: %v", err)
+			}
 			log.Println("Using PostgreSQL storage")
 			return dbConn, repository.NewURLRepository(dbConn)
 		}
