@@ -14,16 +14,18 @@ type urlRecord struct {
 }
 
 type fileURLRepository struct {
-	mu       sync.RWMutex
-	store    map[string]string
-	records  []urlRecord
-	filePath string
+	mu            sync.RWMutex
+	store         map[string]string
+	byOriginalURL map[string]string
+	records       []urlRecord
+	filePath      string
 }
 
 func NewFileURLRepository(filePath string) (URLRepository, error) {
 	repo := &fileURLRepository{
-		store:    make(map[string]string),
-		filePath: filePath,
+		store:         make(map[string]string),
+		byOriginalURL: make(map[string]string),
+		filePath:      filePath,
 	}
 	if err := repo.load(); err != nil {
 		return nil, err
@@ -42,10 +44,8 @@ func (f *fileURLRepository) CreateURL(originalURL string, shortID string) (bool,
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	for existingShortID, existingOrigURL := range f.store {
-		if existingOrigURL == originalURL {
-			return false, &ErrDuplicateURL{ExistingShortID: existingShortID}
-		}
+	if existingShortID, ok := f.byOriginalURL[originalURL]; ok {
+		return false, &ErrDuplicateURL{ExistingShortID: existingShortID}
 	}
 
 	if _, exists := f.store[shortID]; exists {
@@ -53,6 +53,7 @@ func (f *fileURLRepository) CreateURL(originalURL string, shortID string) (bool,
 	}
 
 	f.store[shortID] = originalURL
+	f.byOriginalURL[originalURL] = shortID
 
 	rec := urlRecord{
 		UUID:        strconv.Itoa(len(f.records) + 1),
@@ -76,6 +77,7 @@ func (f *fileURLRepository) CreateURLBatch(items []URLBatchItem) error {
 
 	for _, item := range items {
 		f.store[item.ShortID] = item.OriginalURL
+		f.byOriginalURL[item.OriginalURL] = item.ShortID
 		f.records = append(f.records, urlRecord{
 			UUID:        strconv.Itoa(len(f.records) + 1),
 			ShortURL:    item.ShortID,
@@ -106,6 +108,7 @@ func (f *fileURLRepository) load() error {
 	f.records = records
 	for _, r := range records {
 		f.store[r.ShortURL] = r.OriginalURL
+		f.byOriginalURL[r.OriginalURL] = r.ShortURL
 	}
 	return nil
 }
