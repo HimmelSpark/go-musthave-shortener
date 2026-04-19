@@ -6,8 +6,17 @@ import (
 
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/config/shortener"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/repository"
+
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
+
+type ErrConflict struct {
+	ExistingURL string
+}
+
+func (e *ErrConflict) Error() string {
+	return "url already shortened"
+}
 
 type ShortenBatchInput struct {
 	CorrelationID string
@@ -55,6 +64,12 @@ func (s *shortenerService) ShortenURL(url string) (string, error) {
 		randStr, _ := generateRandomString()
 		ok, err := s.urlRepo.CreateURL(url, randStr)
 		if err != nil {
+			var dupErr *repository.ErrDuplicateURL
+			if errors.As(err, &dupErr) {
+				return "", &ErrConflict{
+					ExistingURL: baseURL + "/" + dupErr.ExistingShortID,
+				}
+			}
 			return "Failed to create a short url", err
 		}
 		if !ok {

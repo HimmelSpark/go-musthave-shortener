@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -38,16 +39,14 @@ func (h *ShortenerHandler) ShortenURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	short, err := h.service.ShortenURL(url)
-
-	// todo продумать бизнесовые ошибки и ловить их тут
+	short, status, err := resolveShortenResult(h.service.ShortenURL(url))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(status)
 	_, _ = w.Write([]byte(short))
 }
 
@@ -91,7 +90,7 @@ func (h *ShortenerHandler) ShortenURLJSON(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	short, err := h.service.ShortenURL(url)
+	short, status, err := resolveShortenResult(h.service.ShortenURL(url))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -100,8 +99,19 @@ func (h *ShortenerHandler) ShortenURLJSON(w http.ResponseWriter, r *http.Request
 	resp := model.ShortenResponse{Result: short}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(status)
 	_, _ = easyjson.MarshalToWriter(&resp, w)
+}
+
+func resolveShortenResult(short string, err error) (string, int, error) {
+	if err == nil {
+		return short, http.StatusCreated, nil
+	}
+	var conflictErr *service.ErrConflict
+	if errors.As(err, &conflictErr) {
+		return conflictErr.ExistingURL, http.StatusConflict, nil
+	}
+	return "", 0, err
 }
 
 func (h *ShortenerHandler) ShortenURLBatch(w http.ResponseWriter, r *http.Request) {
