@@ -12,18 +12,21 @@ import (
 )
 
 type mockShortenerService struct {
-	shortenFn      func(url string) (string, error)
+	shortenFn      func(url string, userID string) (string, error)
 	findFn         func(id string) (string, error)
-	shortenBatchFn func(items []service.ShortenBatchInput) ([]service.ShortenBatchOutput, error)
+	shortenBatchFn func(items []service.ShortenBatchInput, userID string) ([]service.ShortenBatchOutput, error)
+	getUserURLsFn  func(userID string) ([]service.UserURLOutput, error)
 
-	gotURL string
-	gotID  string
+	gotURL    string
+	gotID     string
+	gotUserID string
 }
 
-func (m *mockShortenerService) ShortenURL(url string) (string, error) {
+func (m *mockShortenerService) ShortenURL(url string, userID string) (string, error) {
 	m.gotURL = url
+	m.gotUserID = userID
 	if m.shortenFn != nil {
-		return m.shortenFn(url)
+		return m.shortenFn(url, userID)
 	}
 	return "", nil
 }
@@ -36,9 +39,18 @@ func (m *mockShortenerService) FindURL(id string) (string, error) {
 	return "", nil
 }
 
-func (m *mockShortenerService) ShortenURLBatch(items []service.ShortenBatchInput) ([]service.ShortenBatchOutput, error) {
+func (m *mockShortenerService) ShortenURLBatch(items []service.ShortenBatchInput, userID string) ([]service.ShortenBatchOutput, error) {
+	m.gotUserID = userID
 	if m.shortenBatchFn != nil {
-		return m.shortenBatchFn(items)
+		return m.shortenBatchFn(items, userID)
+	}
+	return nil, nil
+}
+
+func (m *mockShortenerService) GetUserURLs(userID string) ([]service.UserURLOutput, error) {
+	m.gotUserID = userID
+	if m.getUserURLsFn != nil {
+		return m.getUserURLsFn(userID)
 	}
 	return nil, nil
 }
@@ -51,7 +63,7 @@ func newTestHandler() (*ShortenerHandler, *mockShortenerService) {
 
 func TestCreateShortUrlOk(t *testing.T) {
 	h, mock := newTestHandler()
-	mock.shortenFn = func(url string) (string, error) {
+	mock.shortenFn = func(url string, userID string) (string, error) {
 		return "http://localhost:8080/AvAjEv0l", nil
 	}
 
@@ -77,7 +89,7 @@ func TestCreateShortUrlOk(t *testing.T) {
 
 func TestCreateShortUrlConflict(t *testing.T) {
 	h, mock := newTestHandler()
-	mock.shortenFn = func(url string) (string, error) {
+	mock.shortenFn = func(url string, userID string) (string, error) {
 		return "", &service.ErrConflict{ExistingURL: "http://localhost:8080/existing"}
 	}
 

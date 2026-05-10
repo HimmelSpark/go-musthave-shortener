@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/HimmelSpark/go-musthave-shortener.git/internal/auth"
+	authConfig "github.com/HimmelSpark/go-musthave-shortener.git/internal/config/auth"
 	dbConfig "github.com/HimmelSpark/go-musthave-shortener.git/internal/config/db"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/config/server"
 	serviceConfig "github.com/HimmelSpark/go-musthave-shortener.git/internal/config/shortener"
@@ -21,6 +23,7 @@ func main() {
 	serverConfig := server.Init()
 	shortenerConfig := serviceConfig.Init()
 	sqlConfig := dbConfig.Init()
+	authCfg := authConfig.Init()
 	fileConfig, err := storageConfig.Init()
 	if err != nil {
 		panic(err)
@@ -40,13 +43,16 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.LoggingMiddleware)
 	r.Use(middleware.GzipMiddleware)
+	r.Use(auth.Middleware(*authCfg.SecretKey))
 
 	shortenerHandler := handler.NewShortenerHandler(shortenerService)
 	pingHandler := handler.NewPingHandler(dbConn)
+	userHandler := handler.NewUserHandler(shortenerService)
 
 	r.Post("/", shortenerHandler.ShortenURL)
 	r.Post("/api/shorten", shortenerHandler.ShortenURLJSON)
 	r.Post("/api/shorten/batch", shortenerHandler.ShortenURLBatch)
+	r.Get("/api/user/urls", userHandler.GetUserURLs)
 	r.Get("/ping", pingHandler.Ping)
 	r.Get("/{urlId}", shortenerHandler.GetRedirectURL)
 

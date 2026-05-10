@@ -28,10 +28,16 @@ type ShortenBatchOutput struct {
 	ShortURL      string
 }
 
+type UserURLOutput struct {
+	ShortURL    string
+	OriginalURL string
+}
+
 type ShortenerService interface {
-	ShortenURL(url string) (string, error)
+	ShortenURL(url string, userID string) (string, error)
 	FindURL(shortID string) (string, error)
-	ShortenURLBatch(items []ShortenBatchInput) ([]ShortenBatchOutput, error)
+	ShortenURLBatch(items []ShortenBatchInput, userID string) ([]ShortenBatchOutput, error)
+	GetUserURLs(userID string) ([]UserURLOutput, error)
 }
 type shortenerService struct {
 	urlRepo       repository.URLRepository
@@ -57,12 +63,12 @@ func (s *shortenerService) FindURL(shortID string) (string, error) {
 	return s.urlRepo.FindURLShortID(shortID)
 }
 
-func (s *shortenerService) ShortenURL(url string) (string, error) {
+func (s *shortenerService) ShortenURL(url string, userID string) (string, error) {
 	url = strings.TrimSpace(url)
 	baseURL := strings.TrimRight(*s.serviceConfig.BaseURL, "/")
 	for i := 0; i < 5; i++ {
 		randStr, _ := generateRandomString()
-		ok, err := s.urlRepo.CreateURL(url, randStr)
+		ok, err := s.urlRepo.CreateURL(url, randStr, userID)
 		if err != nil {
 			var dupErr *repository.ErrDuplicateURL
 			if errors.As(err, &dupErr) {
@@ -80,7 +86,7 @@ func (s *shortenerService) ShortenURL(url string) (string, error) {
 	return "", errors.New("failed to create a short url")
 }
 
-func (s *shortenerService) ShortenURLBatch(items []ShortenBatchInput) ([]ShortenBatchOutput, error) {
+func (s *shortenerService) ShortenURLBatch(items []ShortenBatchInput, userID string) ([]ShortenBatchOutput, error) {
 	baseURL := strings.TrimRight(*s.serviceConfig.BaseURL, "/")
 
 	for attempt := 0; attempt < 5; attempt++ {
@@ -90,6 +96,7 @@ func (s *shortenerService) ShortenURLBatch(items []ShortenBatchInput) ([]Shorten
 			batchItems[i] = repository.URLBatchItem{
 				OriginalURL: strings.TrimSpace(item.OriginalURL),
 				ShortID:     randStr,
+				UserID:      userID,
 			}
 		}
 
@@ -112,6 +119,25 @@ func (s *shortenerService) ShortenURLBatch(items []ShortenBatchInput) ([]Shorten
 	}
 
 	return nil, errors.New("failed to create batch short urls: too many collisions")
+}
+
+func (s *shortenerService) GetUserURLs(userID string) ([]UserURLOutput, error) {
+	items, err := s.urlRepo.GetUserURLs(userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	baseURL := strings.TrimRight(*s.serviceConfig.BaseURL, "/")
+	result := make([]UserURLOutput, len(items))
+	for i, it := range items {
+		result[i] = UserURLOutput{
+			ShortURL:    baseURL + "/" + it.ShortID,
+			OriginalURL: it.OriginalURL,
+		}
+	}
+	return result, nil
 }
 
 func generateRandomString() (string, error) {

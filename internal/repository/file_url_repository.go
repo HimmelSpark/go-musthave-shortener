@@ -11,12 +11,14 @@ type urlRecord struct {
 	UUID        string `json:"uuid"`
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
+	UserID      string `json:"user_id,omitempty"`
 }
 
 type fileURLRepository struct {
 	mu            sync.RWMutex
 	store         map[string]string
 	byOriginalURL map[string]string
+	byUserID      map[string][]string
 	records       []urlRecord
 	filePath      string
 }
@@ -25,6 +27,7 @@ func NewFileURLRepository(filePath string) (URLRepository, error) {
 	repo := &fileURLRepository{
 		store:         make(map[string]string),
 		byOriginalURL: make(map[string]string),
+		byUserID:      make(map[string][]string),
 		filePath:      filePath,
 	}
 	if err := repo.load(); err != nil {
@@ -40,7 +43,7 @@ func (f *fileURLRepository) FindURLShortID(shortID string) (string, error) {
 	return f.store[shortID], nil
 }
 
-func (f *fileURLRepository) CreateURL(originalURL string, shortID string) (bool, error) {
+func (f *fileURLRepository) CreateURL(originalURL string, shortID string, userID string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -54,11 +57,15 @@ func (f *fileURLRepository) CreateURL(originalURL string, shortID string) (bool,
 
 	f.store[shortID] = originalURL
 	f.byOriginalURL[originalURL] = shortID
+	if userID != "" {
+		f.byUserID[userID] = append(f.byUserID[userID], shortID)
+	}
 
 	rec := urlRecord{
 		UUID:        strconv.Itoa(len(f.records) + 1),
 		ShortURL:    shortID,
 		OriginalURL: originalURL,
+		UserID:      userID,
 	}
 	f.records = append(f.records, rec)
 
@@ -78,14 +85,38 @@ func (f *fileURLRepository) CreateURLBatch(items []URLBatchItem) error {
 	for _, item := range items {
 		f.store[item.ShortID] = item.OriginalURL
 		f.byOriginalURL[item.OriginalURL] = item.ShortID
+		if item.UserID != "" {
+			f.byUserID[item.UserID] = append(f.byUserID[item.UserID], item.ShortID)
+		}
 		f.records = append(f.records, urlRecord{
 			UUID:        strconv.Itoa(len(f.records) + 1),
 			ShortURL:    item.ShortID,
 			OriginalURL: item.OriginalURL,
+			UserID:      item.UserID,
 		})
 	}
 
 	return f.save()
+}
+
+func (f *fileURLRepository) GetUserURLs(userID string) ([]UserURL, error) {
+	if userID == "" {
+		return nil, nil
+	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	shortIDs := f.byUserID[userID]
+	if len(shortIDs) == 0 {
+		return nil, nil
+	}
+	result := make([]UserURL, 0, len(shortIDs))
+	for _, sid := range shortIDs {
+		if originalURL, ok := f.store[sid]; ok {
+			result = append(result, UserURL{ShortID: sid, OriginalURL: originalURL})
+		}
+	}
+	return result, nil
 }
 
 func (f *fileURLRepository) load() error {
@@ -109,6 +140,9 @@ func (f *fileURLRepository) load() error {
 	for _, r := range records {
 		f.store[r.ShortURL] = r.OriginalURL
 		f.byOriginalURL[r.OriginalURL] = r.ShortURL
+		if r.UserID != "" {
+			f.byUserID[r.UserID] = append(f.byUserID[r.UserID], r.ShortURL)
+		}
 	}
 	return nil
 }
