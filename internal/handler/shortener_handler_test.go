@@ -13,7 +13,7 @@ import (
 
 type mockShortenerService struct {
 	shortenFn      func(url string, userID string) (string, error)
-	findFn         func(id string) (string, error)
+	findFn         func(id string) (string, bool, error)
 	shortenBatchFn func(items []service.ShortenBatchInput, userID string) ([]service.ShortenBatchOutput, error)
 	getUserURLsFn  func(userID string) ([]service.UserURLOutput, error)
 
@@ -31,12 +31,12 @@ func (m *mockShortenerService) ShortenURL(url string, userID string) (string, er
 	return "", nil
 }
 
-func (m *mockShortenerService) FindURL(id string) (string, error) {
+func (m *mockShortenerService) FindURL(id string) (string, bool, error) {
 	m.gotID = id
 	if m.findFn != nil {
 		return m.findFn(id)
 	}
-	return "", nil
+	return "", false, nil
 }
 
 func (m *mockShortenerService) ShortenURLBatch(items []service.ShortenBatchInput, userID string) ([]service.ShortenBatchOutput, error) {
@@ -113,8 +113,8 @@ func TestCreateShortUrlConflict(t *testing.T) {
 
 func TestGetRedirectURLOk(t *testing.T) {
 	h, mock := newTestHandler()
-	mock.findFn = func(id string) (string, error) {
-		return "https://yandex.ru", nil
+	mock.findFn = func(id string) (string, bool, error) {
+		return "https://yandex.ru", false, nil
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/AvAjEv0l", nil)
@@ -129,4 +129,23 @@ func TestGetRedirectURLOk(t *testing.T) {
 	require.Equal(t, http.StatusTemporaryRedirect, res.StatusCode)
 	require.Equal(t, "https://yandex.ru", res.Header.Get("Location"))
 	require.Equal(t, "AvAjEv0l", mock.gotID)
+}
+
+func TestGetRedirectURLGone(t *testing.T) {
+	h, mock := newTestHandler()
+	mock.findFn = func(id string) (string, bool, error) {
+		return "https://yandex.ru", true, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/AvAjEv0l", nil)
+	req.SetPathValue("urlId", "AvAjEv0l")
+	rec := httptest.NewRecorder()
+
+	h.GetRedirectURL(rec, req)
+
+	res := rec.Result()
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusGone, res.StatusCode)
+	require.Empty(t, res.Header.Get("Location"))
 }

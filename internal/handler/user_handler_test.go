@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/auth"
@@ -12,10 +14,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestUserHandler() (*UserHandler, *mockShortenerService) {
+type mockDeletionService struct {
+	gotUserID string
+	gotIDs    []string
+	calls     int
+}
+
+func (m *mockDeletionService) Submit(userID string, shortIDs []string) {
+	m.calls++
+	m.gotUserID = userID
+	m.gotIDs = append([]string(nil), shortIDs...)
+}
+
+func (m *mockDeletionService) Run(_ context.Context) {}
+
+func newTestUserHandler() (*UserHandler, *mockShortenerService, *mockDeletionService) {
 	m := &mockShortenerService{}
-	h := NewUserHandler(m)
-	return h, m
+	d := &mockDeletionService{}
+	h := NewUserHandler(m, d)
+	return h, m, d
 }
 
 func withAuth(req *http.Request, info auth.Info) *http.Request {
@@ -23,7 +40,7 @@ func withAuth(req *http.Request, info auth.Info) *http.Request {
 }
 
 func TestGetUserURLs_OK(t *testing.T) {
-	h, mock := newTestUserHandler()
+	h, mock, _ := newTestUserHandler()
 	mock.getUserURLsFn = func(userID string) ([]service.UserURLOutput, error) {
 		require.Equal(t, "user-1", userID)
 		return []service.UserURLOutput{
@@ -54,7 +71,7 @@ func TestGetUserURLs_OK(t *testing.T) {
 }
 
 func TestGetUserURLs_NoContent(t *testing.T) {
-	h, mock := newTestUserHandler()
+	h, mock, _ := newTestUserHandler()
 	mock.getUserURLsFn = func(userID string) ([]service.UserURLOutput, error) {
 		return nil, nil
 	}
@@ -72,7 +89,7 @@ func TestGetUserURLs_NoContent(t *testing.T) {
 }
 
 func TestGetUserURLs_Unauthorized(t *testing.T) {
-	h, _ := newTestUserHandler()
+	h, _, _ := newTestUserHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/user/urls", nil)
 	req = withAuth(req, auth.Info{UserID: "user-1", CookiePresent: true, CookieValid: false})
@@ -85,3 +102,40 @@ func TestGetUserURLs_Unauthorized(t *testing.T) {
 
 	require.Equal(t, http.StatusUnauthorized, res.StatusCode)
 }
+
+func TestDeleteUserURLs_Accepted(t *testing.T) {
+	h, _, del := newTestUserHandler()
+
+	body := strings.NewReader(`["abc","def","ghi"]`)
+	req := httptest.NewRequest(http.MethodDelete, "/api/user/urls", body)
+	req = withAuth(req, auth.Info{UserID: "user-1", CookiePresent: true, CookieValid: true})
+	rec := httptest.NewRecorder()
+
+	h.DeleteUserURLs(rec, req)
+
+	res := rec.Result()
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusAccepted, res.StatusCode)
+	require.Equal(t, 1, del.calls)
+	require.Equal(t, "user-1", del.gotUserID)
+	require.Equal(t, []string{"abc", "def", "ghi"}, del.gotIDs)
+}
+
+func TestDeleteUserURLs_Unauthorized(t *testing.T) {
+	h, _, del := newTestUserHandler()
+
+	body := strings.NewReader(`["abc"]`)
+	req := httptest.NewRequest(http.MethodDelete, "/api/user/urls", body)
+	req = withAuth(req, auth.Info{UserID: "user-1", CookiePresent: true, CookieValid: false})
+	rec := httptest.NewRecorder()
+
+	h.DeleteUserURLs(rec, req)
+
+	res := rec.Result()
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	require.Equal(t, 0, del.calls)
+}
+

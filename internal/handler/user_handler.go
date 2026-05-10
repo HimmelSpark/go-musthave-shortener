@@ -10,11 +10,12 @@ import (
 )
 
 type UserHandler struct {
-	service service.ShortenerService
+	service  service.ShortenerService
+	deletion service.DeletionService
 }
 
-func NewUserHandler(shortenerService service.ShortenerService) *UserHandler {
-	return &UserHandler{shortenerService}
+func NewUserHandler(shortenerService service.ShortenerService, deletion service.DeletionService) *UserHandler {
+	return &UserHandler{service: shortenerService, deletion: deletion}
 }
 
 func (h *UserHandler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
@@ -46,4 +47,31 @@ func (h *UserHandler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = easyjson.MarshalToWriter(&resp, w)
+}
+
+func (h *UserHandler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
+	info := auth.FromContext(r.Context())
+	if info.CookiePresent && !info.CookieValid {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if info.UserID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	var ids model.DeleteUserURLsRequest
+	if err := easyjson.UnmarshalFromReader(r.Body, &ids); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if len(ids) == 0 {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
+	h.deletion.Submit(info.UserID, ids)
+	w.WriteHeader(http.StatusAccepted)
 }

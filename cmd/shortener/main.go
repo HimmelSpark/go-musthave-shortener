@@ -1,10 +1,16 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/auth"
 	authConfig "github.com/HimmelSpark/go-musthave-shortener.git/internal/config/auth"
@@ -20,45 +26,68 @@ import (
 )
 
 func main() {
-	serverConfig := server.Init()
-	shortenerConfig := serviceConfig.Init()
-	sqlConfig := dbConfig.Init()
+	serverCfg := server.Init()
+	shortenerCfg := serviceConfig.Init()
+	sqlCfg := dbConfig.Init()
 	authCfg := authConfig.Init()
-	fileConfig, err := storageConfig.Init()
+	fileCfg, err := storageConfig.Init()
 	if err != nil {
 		panic(err)
 	}
 
 	flag.Parse()
+	sqlCfg.ApplyEnv()
 
-	sqlConfig.ApplyEnv()
+	dbConn, urlRepo := initStorage(sqlCfg, fileCfg)
 
-	dbConn, urlRepo := initStorage(sqlConfig, fileConfig)
-
-	shortenerService, err := service.NewShortenerService(urlRepo, shortenerConfig)
+	shortenerSvc, err := service.NewShortenerService(urlRepo, shortenerCfg)
 	if err != nil {
 		panic(err)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	deletionSvc := service.NewDeletionService(urlRepo, 1024, 256, time.Second)
+	go deletionSvc.Run(ctx)
+
+	router := buildRouter(*authCfg.SecretKey, shortenerSvc, deletionSvc, dbConn)
+	runHTTPServer(ctx, *serverCfg.ServerAddress, router)
+}
+
+func buildRouter(authSecret string, shortenerSvc service.ShortenerService, deletionSvc service.DeletionService, dbConn *sql.DB) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.LoggingMiddleware)
 	r.Use(middleware.GzipMiddleware)
-	r.Use(auth.Middleware(*authCfg.SecretKey))
+	r.Use(auth.Middleware(authSecret))
 
-	shortenerHandler := handler.NewShortenerHandler(shortenerService)
-	pingHandler := handler.NewPingHandler(dbConn)
-	userHandler := handler.NewUserHandler(shortenerService)
+	shortenerH := handler.NewShortenerHandler(shortenerSvc)
+	pingH := handler.NewPingHandler(dbConn)
+	userH := handler.NewUserHandler(shortenerSvc, deletionSvc)
 
-	r.Post("/", shortenerHandler.ShortenURL)
-	r.Post("/api/shorten", shortenerHandler.ShortenURLJSON)
-	r.Post("/api/shorten/batch", shortenerHandler.ShortenURLBatch)
-	r.Get("/api/user/urls", userHandler.GetUserURLs)
-	r.Get("/ping", pingHandler.Ping)
-	r.Get("/{urlId}", shortenerHandler.GetRedirectURL)
+	r.Post("/", shortenerH.ShortenURL)
+	r.Post("/api/shorten", shortenerH.ShortenURLJSON)
+	r.Post("/api/shorten/batch", shortenerH.ShortenURLBatch)
+	r.Get("/api/user/urls", userH.GetUserURLs)
+	r.Delete("/api/user/urls", userH.DeleteUserURLs)
+	r.Get("/ping", pingH.Ping)
+	r.Get("/{urlId}", shortenerH.GetRedirectURL)
 
-	if err := http.ListenAndServe(*serverConfig.ServerAddress, r); err != nil {
-		panic(err)
-	}
+	return r
+}
+
+func runHTTPServer(ctx context.Context, addr string, h http.Handler) {
+	srv := &http.Server{Addr: addr, Handler: h}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("http server: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(shutdownCtx)
 }
 
 func initStorage(sqlConfig *dbConfig.SQLConfig, fileConfig *storageConfig.Config) (*sql.DB, repository.URLRepository) {
