@@ -13,6 +13,12 @@ import (
 type URLBatchItem struct {
 	OriginalURL string
 	ShortID     string
+	UserID      string
+}
+
+type UserURL struct {
+	ShortID     string
+	OriginalURL string
 }
 
 var ErrBatchCollision = errors.New("batch insert collision")
@@ -28,8 +34,9 @@ func (e *ErrDuplicateURL) Error() string {
 type (
 	URLRepository interface {
 		FindURLShortID(string) (string, error)
-		CreateURL(originalURL string, shortID string) (bool, error)
+		CreateURL(originalURL string, shortID string, userID string) (bool, error)
 		CreateURLBatch(items []URLBatchItem) error
+		GetUserURLs(userID string) ([]UserURL, error)
 	}
 
 	urlRepository struct {
@@ -57,15 +64,16 @@ func (u urlRepository) FindURLShortID(shortURLID string) (string, error) {
 	return originalURL, nil
 }
 
-func (u urlRepository) CreateURL(originalURL string, shortID string) (bool, error) {
+func (u urlRepository) CreateURL(originalURL string, shortID string, userID string) (bool, error) {
 	var returnedShortID string
 	err := u.db.QueryRow(
-		`INSERT INTO shortener.redirection (original_url, redirect_url)
-		 VALUES ($1, $2)
+		`INSERT INTO shortener.redirection (original_url, redirect_url, user_id)
+		 VALUES ($1, $2, $3)
 		 ON CONFLICT (original_url) DO UPDATE SET original_url = EXCLUDED.original_url
 		 RETURNING redirect_url`,
 		originalURL,
 		shortID,
+		userID,
 	).Scan(&returnedShortID)
 
 	if err != nil {
@@ -91,15 +99,15 @@ func (u urlRepository) CreateURLBatch(items []URLBatchItem) error {
 	defer tx.Rollback()
 
 	var b strings.Builder
-	b.WriteString("INSERT INTO shortener.redirection (original_url, redirect_url) VALUES ")
+	b.WriteString("INSERT INTO shortener.redirection (original_url, redirect_url, user_id) VALUES ")
 
-	args := make([]any, 0, len(items)*2)
+	args := make([]any, 0, len(items)*3)
 	for i, item := range items {
 		if i > 0 {
 			b.WriteString(",")
 		}
-		b.WriteString(fmt.Sprintf("($%d,$%d)", i*2+1, i*2+2))
-		args = append(args, item.OriginalURL, item.ShortID)
+		b.WriteString(fmt.Sprintf("($%d,$%d,$%d)", i*3+1, i*3+2, i*3+3))
+		args = append(args, item.OriginalURL, item.ShortID, item.UserID)
 	}
 	b.WriteString(" ON CONFLICT (redirect_url) DO NOTHING")
 
@@ -119,3 +127,32 @@ func (u urlRepository) CreateURLBatch(items []URLBatchItem) error {
 
 	return tx.Commit()
 }
+
+func (u urlRepository) GetUserURLs(userID string) ([]UserURL, error) {
+	if userID == "" {
+		return nil, nil
+	}
+
+	rows, err := u.db.Query(
+		"SELECT redirect_url, original_url FROM shortener.redirection WHERE user_id = $1",
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []UserURL
+	for rows.Next() {
+		var item UserURL
+		if err := rows.Scan(&item.ShortID, &item.OriginalURL); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+

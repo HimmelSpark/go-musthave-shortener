@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/HimmelSpark/go-musthave-shortener.git/internal/auth"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/model"
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/service"
 	"github.com/mailru/easyjson"
@@ -39,7 +40,7 @@ func (h *ShortenerHandler) ShortenURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	short, status, err := resolveShortenResult(h.service.ShortenURL(url))
+	short, status, err := resolveShortenResult(h.service.ShortenURL(url, auth.UserIDFromContext(r.Context())))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -90,7 +91,7 @@ func (h *ShortenerHandler) ShortenURLJSON(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	short, status, err := resolveShortenResult(h.service.ShortenURL(url))
+	short, status, err := resolveShortenResult(h.service.ShortenURL(url, auth.UserIDFromContext(r.Context())))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -140,7 +141,7 @@ func (h *ShortenerHandler) ShortenURLBatch(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	outputs, err := h.service.ShortenURLBatch(inputs)
+	outputs, err := h.service.ShortenURLBatch(inputs, auth.UserIDFromContext(r.Context()))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

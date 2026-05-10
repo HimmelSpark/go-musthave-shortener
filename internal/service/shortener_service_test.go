@@ -14,7 +14,7 @@ func TestShortenerService_FindURL_OK(t *testing.T) {
 	svc, err := NewShortenerService(repo, &config.ServiceConfig{BaseURL: &baseURL})
 	require.NoError(t, err)
 
-	ok, err := repo.CreateURL("https://yandex.ru", "AvAjEv0l")
+	ok, err := repo.CreateURL("https://yandex.ru", "AvAjEv0l", "")
 	require.NoError(t, err)
 	require.True(t, ok)
 
@@ -31,7 +31,7 @@ func TestShortenerService_ShortenURL_OK(t *testing.T) {
 
 	orig := "  https://yandex.ru  "
 
-	short, err := svc.ShortenURL(orig)
+	short, err := svc.ShortenURL(orig, "user-1")
 	require.NoError(t, err)
 
 	require.Contains(t, short, host+"/")
@@ -40,4 +40,31 @@ func TestShortenerService_ShortenURL_OK(t *testing.T) {
 	got, err := svc.FindURL(shortID)
 	require.NoError(t, err)
 	require.Equal(t, "https://yandex.ru", got)
+}
+
+func TestShortenerService_GetUserURLs_IsolatedPerUser(t *testing.T) {
+	repo := repository.NewInMemoryURLRepository()
+	host := "http://localhost:8080"
+	svc, err := NewShortenerService(repo, &config.ServiceConfig{BaseURL: &host})
+	require.NoError(t, err)
+
+	_, err = svc.ShortenURL("https://yandex.ru", "userA")
+	require.NoError(t, err)
+	_, err = svc.ShortenURL("https://google.com", "userA")
+	require.NoError(t, err)
+	_, err = svc.ShortenURL("https://example.com", "userB")
+	require.NoError(t, err)
+
+	a, err := svc.GetUserURLs("userA")
+	require.NoError(t, err)
+	require.Len(t, a, 2)
+
+	b, err := svc.GetUserURLs("userB")
+	require.NoError(t, err)
+	require.Len(t, b, 1)
+	require.Equal(t, "https://example.com", b[0].OriginalURL)
+
+	none, err := svc.GetUserURLs("userC")
+	require.NoError(t, err)
+	require.Empty(t, none)
 }
