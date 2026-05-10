@@ -24,7 +24,10 @@ func TestMiddlewareNoCookieIssuesNew(t *testing.T) {
 	require.False(t, captured.CookiePresent)
 	require.False(t, captured.CookieValid)
 
-	cookies := rec.Result().Cookies()
+	res := rec.Result()
+	defer res.Body.Close()
+
+	cookies := res.Cookies()
 	require.Len(t, cookies, 1)
 	require.Equal(t, CookieName, cookies[0].Name)
 }
@@ -47,7 +50,10 @@ func TestMiddlewareValidCookiePassesThrough(t *testing.T) {
 	require.True(t, captured.CookiePresent)
 	require.True(t, captured.CookieValid)
 
-	require.Empty(t, rec.Result().Cookies())
+	res := rec.Result()
+	defer res.Body.Close()
+
+	require.Empty(t, res.Cookies())
 }
 
 func TestMiddlewareTamperedCookieReissuedAndFlagsSet(t *testing.T) {
@@ -68,7 +74,10 @@ func TestMiddlewareTamperedCookieReissuedAndFlagsSet(t *testing.T) {
 	require.True(t, captured.CookiePresent)
 	require.False(t, captured.CookieValid)
 
-	require.Len(t, rec.Result().Cookies(), 1)
+	res := rec.Result()
+	defer res.Body.Close()
+
+	require.Len(t, res.Cookies(), 1)
 }
 
 func TestMiddlewareMalformedCookieReissued(t *testing.T) {
