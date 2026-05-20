@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"log"
+	"sync/atomic"
 	"time"
 
 	"github.com/HimmelSpark/go-musthave-shortener.git/internal/repository"
@@ -23,6 +24,7 @@ type deletionService struct {
 	jobs          chan deletionJob
 	bufSize       int
 	flushInterval time.Duration
+	dropped       atomic.Uint64
 }
 
 func NewDeletionService(repo repository.URLRepository, channelBuf, bufSize int, flushInterval time.Duration) DeletionService {
@@ -40,7 +42,11 @@ func (s *deletionService) Submit(userID string, shortIDs []string) {
 	}
 	go func(uid string, ids []string) {
 		for _, id := range ids {
-			s.jobs <- deletionJob{userID: uid, shortID: id}
+			select {
+			case s.jobs <- deletionJob{userID: uid, shortID: id}:
+			default:
+				s.dropped.Add(1)
+			}
 		}
 	}(userID, append([]string(nil), shortIDs...))
 }
@@ -51,6 +57,9 @@ func (s *deletionService) Run(ctx context.Context) {
 	defer ticker.Stop()
 
 	flush := func() {
+		if n := s.dropped.Swap(0); n > 0 {
+			log.Printf("deletion buffer overflow: dropped %d updates", n)
+		}
 		if len(buf) == 0 {
 			return
 		}
