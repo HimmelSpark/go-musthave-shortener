@@ -18,8 +18,9 @@ func TestShortenerService_FindURL_OK(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	got, err := svc.FindURL("AvAjEv0l")
+	got, isDeleted, err := svc.FindURL("AvAjEv0l")
 	require.NoError(t, err)
+	require.False(t, isDeleted)
 	require.Equal(t, "https://yandex.ru", got)
 }
 
@@ -37,8 +38,9 @@ func TestShortenerService_ShortenURL_OK(t *testing.T) {
 	require.Contains(t, short, host+"/")
 
 	shortID := short[len(host)+1:]
-	got, err := svc.FindURL(shortID)
+	got, isDeleted, err := svc.FindURL(shortID)
 	require.NoError(t, err)
+	require.False(t, isDeleted)
 	require.Equal(t, "https://yandex.ru", got)
 }
 

@@ -36,3 +36,6 @@ type UserURLItem struct {
 
 //easyjson:json
 type UserURLList []UserURLItem
+
+//easyjson:json
+type DeleteUserURLsRequest []string

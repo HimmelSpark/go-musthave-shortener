@@ -33,10 +33,11 @@ func (e *ErrDuplicateURL) Error() string {
 
 type (
 	URLRepository interface {
-		FindURLShortID(string) (string, error)
+		FindURLShortID(shortID string) (originalURL string, isDeleted bool, err error)
 		CreateURL(originalURL string, shortID string, userID string) (bool, error)
 		CreateURLBatch(items []URLBatchItem) error
 		GetUserURLs(userID string) ([]UserURL, error)
+		DeleteUserURLs(userID string, shortIDs []string) error
 	}
 
 	urlRepository struct {
@@ -48,20 +49,24 @@ func NewURLRepository(db *sql.DB) URLRepository {
 	return &urlRepository{db: db}
 }
 
-func (u urlRepository) FindURLShortID(shortURLID string) (string, error) {
-	row := u.db.QueryRow("SELECT original_url FROM shortener.redirection WHERE redirect_url = $1", shortURLID)
+func (u urlRepository) FindURLShortID(shortURLID string) (string, bool, error) {
+	row := u.db.QueryRow(
+		"SELECT original_url, is_deleted FROM shortener.redirection WHERE redirect_url = $1",
+		shortURLID,
+	)
 
 	var originalURL string
+	var isDeleted bool
 
-	err := row.Scan(&originalURL)
+	err := row.Scan(&originalURL, &isDeleted)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", nil
+			return "", false, nil
 		}
-		return "", err
+		return "", false, err
 	}
 
-	return originalURL, nil
+	return originalURL, isDeleted, nil
 }
 
 func (u urlRepository) CreateURL(originalURL string, shortID string, userID string) (bool, error) {
@@ -126,6 +131,31 @@ func (u urlRepository) CreateURLBatch(items []URLBatchItem) error {
 	}
 
 	return tx.Commit()
+}
+
+func (u urlRepository) DeleteUserURLs(userID string, shortIDs []string) error {
+	if userID == "" || len(shortIDs) == 0 {
+		return nil
+	}
+
+	var b strings.Builder
+	b.WriteString("UPDATE shortener.redirection SET is_deleted = TRUE WHERE user_id = $1 AND redirect_url IN (")
+
+	args := make([]any, 0, len(shortIDs)+1)
+	args = append(args, userID)
+	for i, sid := range shortIDs {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(fmt.Sprintf("$%d", i+2))
+		args = append(args, sid)
+	}
+	b.WriteString(")")
+
+	if _, err := u.db.Exec(b.String(), args...); err != nil {
+		return fmt.Errorf("failed to soft-delete user urls: %w", err)
+	}
+	return nil
 }
 
 func (u urlRepository) GetUserURLs(userID string) ([]UserURL, error) {

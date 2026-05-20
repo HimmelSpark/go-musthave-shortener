@@ -35,7 +35,7 @@ type UserURLOutput struct {
 
 type ShortenerService interface {
 	ShortenURL(url string, userID string) (string, error)
-	FindURL(shortID string) (string, error)
+	FindURL(shortID string) (originalURL string, isDeleted bool, err error)
 	ShortenURLBatch(items []ShortenBatchInput, userID string) ([]ShortenBatchOutput, error)
 	GetUserURLs(userID string) ([]UserURLOutput, error)
 }
@@ -58,7 +58,7 @@ func NewShortenerService(urlRepo repository.URLRepository, serviceConfig *shorte
 	}, nil
 }
 
-func (s *shortenerService) FindURL(shortID string) (string, error) {
+func (s *shortenerService) FindURL(shortID string) (string, bool, error) {
 	shortID = strings.TrimSpace(shortID)
 	return s.urlRepo.FindURLShortID(shortID)
 }

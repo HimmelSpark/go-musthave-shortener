@@ -12,6 +12,7 @@ type urlRecord struct {
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
 	UserID      string `json:"user_id,omitempty"`
+	IsDeleted   bool   `json:"is_deleted,omitempty"`
 }
 
 type fileURLRepository struct {
@@ -19,6 +20,8 @@ type fileURLRepository struct {
 	store         map[string]string
 	byOriginalURL map[string]string
 	byUserID      map[string][]string
+	byShortIDUser map[string]string
+	deleted       map[string]bool
 	records       []urlRecord
 	filePath      string
 }
@@ -28,6 +31,8 @@ func NewFileURLRepository(filePath string) (URLRepository, error) {
 		store:         make(map[string]string),
 		byOriginalURL: make(map[string]string),
 		byUserID:      make(map[string][]string),
+		byShortIDUser: make(map[string]string),
+		deleted:       make(map[string]bool),
 		filePath:      filePath,
 	}
 	if err := repo.load(); err != nil {
@@ -36,11 +41,15 @@ func NewFileURLRepository(filePath string) (URLRepository, error) {
 	return repo, nil
 }
 
-func (f *fileURLRepository) FindURLShortID(shortID string) (string, error) {
+func (f *fileURLRepository) FindURLShortID(shortID string) (string, bool, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	return f.store[shortID], nil
+	originalURL, ok := f.store[shortID]
+	if !ok {
+		return "", false, nil
+	}
+	return originalURL, f.deleted[shortID], nil
 }
 
 func (f *fileURLRepository) CreateURL(originalURL string, shortID string, userID string) (bool, error) {
@@ -59,6 +68,7 @@ func (f *fileURLRepository) CreateURL(originalURL string, shortID string, userID
 	f.byOriginalURL[originalURL] = shortID
 	if userID != "" {
 		f.byUserID[userID] = append(f.byUserID[userID], shortID)
+		f.byShortIDUser[shortID] = userID
 	}
 
 	rec := urlRecord{
@@ -87,6 +97,7 @@ func (f *fileURLRepository) CreateURLBatch(items []URLBatchItem) error {
 		f.byOriginalURL[item.OriginalURL] = item.ShortID
 		if item.UserID != "" {
 			f.byUserID[item.UserID] = append(f.byUserID[item.UserID], item.ShortID)
+			f.byShortIDUser[item.ShortID] = item.UserID
 		}
 		f.records = append(f.records, urlRecord{
 			UUID:        strconv.Itoa(len(f.records) + 1),
@@ -119,6 +130,33 @@ func (f *fileURLRepository) GetUserURLs(userID string) ([]UserURL, error) {
 	return result, nil
 }
 
+func (f *fileURLRepository) DeleteUserURLs(userID string, shortIDs []string) error {
+	if userID == "" || len(shortIDs) == 0 {
+		return nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	changed := false
+	for _, sid := range shortIDs {
+		if f.byShortIDUser[sid] != userID || f.deleted[sid] {
+			continue
+		}
+		f.deleted[sid] = true
+		for i := range f.records {
+			if f.records[i].ShortURL == sid {
+				f.records[i].IsDeleted = true
+				break
+			}
+		}
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	return f.save()
+}
+
 func (f *fileURLRepository) load() error {
 	data, err := os.ReadFile(f.filePath)
 	if err != nil {
@@ -142,6 +180,10 @@ func (f *fileURLRepository) load() error {
 		f.byOriginalURL[r.OriginalURL] = r.ShortURL
 		if r.UserID != "" {
 			f.byUserID[r.UserID] = append(f.byUserID[r.UserID], r.ShortURL)
+			f.byShortIDUser[r.ShortURL] = r.UserID
+		}
+		if r.IsDeleted {
+			f.deleted[r.ShortURL] = true
 		}
 	}
 	return nil

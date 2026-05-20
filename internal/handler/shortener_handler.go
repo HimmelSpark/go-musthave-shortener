@@ -63,7 +63,7 @@ func (h *ShortenerHandler) GetRedirectURL(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	url, err := h.service.FindURL(urlShortID)
+	url, isDeleted, err := h.service.FindURL(urlShortID)
 	if err != nil {
 		http.Error(w, "Failed to find url", http.StatusBadRequest)
 		return
@@ -71,6 +71,11 @@ func (h *ShortenerHandler) GetRedirectURL(w http.ResponseWriter, r *http.Request
 
 	if url == "" {
 		http.NotFound(w, r)
+		return
+	}
+
+	if isDeleted {
+		w.WriteHeader(http.StatusGone)
 		return
 	}
 
